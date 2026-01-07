@@ -1,0 +1,14 @@
+---
+alwaysApply: true
+---
+
+# Node packages management
+
+This project use only `pnpm` for node packages management. Never use any other Node packages managements (npm, yarn, bun, ...)
+
+## Allow commands
+
+pnpm install
+pnpm add [packages]
+pnpm remove [packages]
+pnpm ...
