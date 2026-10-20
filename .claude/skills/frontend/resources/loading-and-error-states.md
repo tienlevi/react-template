@@ -297,13 +297,13 @@ import React from 'react';
 import { Box, Paper } from '@mui/material';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { SuspenseLoader } from '~components/SuspenseLoader';
-import { myFeatureApi } from '../api/myFeatureApi';
+import { entityApi } from '@/services/entity';
 
 // Inner component uses useSuspenseQuery
 const InnerComponent: React.FC<{ id: number }> = ({ id }) => {
     const { data } = useSuspenseQuery({
         queryKey: ['entity', id],
-        queryFn: () => myFeatureApi.getEntity(id),
+        queryFn: () => entityApi.getEntity(id),
     });
 
     // data is always defined - no isLoading needed!
@@ -336,12 +336,12 @@ import React from 'react';
 import { Box } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { LoadingOverlay } from '~components/LoadingOverlay';
-import { myFeatureApi } from '../api/myFeatureApi';
+import { entityApi } from '@/services/entity';
 
 export const LegacyComponent: React.FC<{ id: number }> = ({ id }) => {
     const { data, isLoading, error } = useQuery({
         queryKey: ['entity', id],
-        queryFn: () => myFeatureApi.getEntity(id),
+        queryFn: () => entityApi.getEntity(id),
     });
 
     return (
@@ -362,7 +362,7 @@ import React from 'react';
 import { useSuspenseQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@mui/material';
 import { useMuiSnackbar } from '@/hooks/useMuiSnackbar';
-import { myFeatureApi } from '../api/myFeatureApi';
+import { entityApi } from '@/services/entity';
 
 export const EntityEditor: React.FC<{ id: number }> = ({ id }) => {
     const queryClient = useQueryClient();
@@ -370,14 +370,14 @@ export const EntityEditor: React.FC<{ id: number }> = ({ id }) => {
 
     const { data } = useSuspenseQuery({
         queryKey: ['entity', id],
-        queryFn: () => myFeatureApi.getEntity(id),
+        queryFn: () => entityApi.getEntity(id),
         onError: () => {
             showError('Failed to load entity');
         },
     });
 
     const updateMutation = useMutation({
-        mutationFn: (updates) => myFeatureApi.update(id, updates),
+        mutationFn: (updates) => entityApi.update(id, updates),
 
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['entity', id] });

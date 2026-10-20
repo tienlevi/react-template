@@ -53,7 +53,7 @@ import { lazy } from 'react';
 
 // Lazy load the page component
 const PostsList = lazy(() =>
-    import('@/features/posts/components/PostsList').then(
+    import('@/components/Posts/PostsList').then(
         (module) => ({ default: module.PostsList }),
     ),
 );
@@ -96,7 +96,7 @@ import { lazy } from 'react';
 
 // For named exports, use .then() to map to default
 const MyPage = lazy(() =>
-    import('@/features/my-feature/components/MyPage').then(
+    import('@/pages/MyPage').then(
         (module) => ({ default: module.MyPage })
     )
 );
@@ -108,7 +108,7 @@ const MyPage = lazy(() =>
 import { lazy } from 'react';
 
 // For default exports, simpler syntax
-const MyPage = lazy(() => import('@/features/my-feature/components/MyPage'));
+const MyPage = lazy(() => import('@/pages/MyPage'));
 ```
 
 ### Why Lazy Load Routes?
@@ -320,7 +320,7 @@ import { SuspenseLoader } from '~components/SuspenseLoader';
 
 // Lazy load heavy component
 const UserProfile = lazy(() =>
-    import('@/features/users/components/UserProfile').then(
+    import('@/components/User/UserProfile').then(
         (module) => ({ default: module.UserProfile })
     )
 );

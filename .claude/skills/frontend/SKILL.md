@@ -1,6 +1,6 @@
 ---
 name: frontend
-description: Frontend development guidelines for React/TypeScript applications. Modern patterns including Suspense, lazy loading, useSuspenseQuery, file organization with features directory, MUI v7 styling, TanStack Router, performance optimization, and TypeScript best practices. Use when creating components, pages, features, fetching data, styling, routing, or working with frontend code.
+description: Frontend development guidelines for React/TypeScript applications. Modern patterns including Suspense, lazy loading, useSuspenseQuery, file organization, MUI v7 styling, TanStack Router, performance optimization, and TypeScript best practices. Use when creating components, pages, fetching data, styling, routing, or working with frontend code.
 ---
 
 # Frontend Development Guidelines
@@ -12,7 +12,6 @@ Comprehensive guide for modern React development, emphasizing Suspense-based dat
 ## When to Use This Skill
 
 - Creating new components or pages
-- Building new features
 - Fetching data with TanStack Query
 - Setting up routing with TanStack Router
 - Styling components with MUI v7
@@ -32,25 +31,12 @@ Creating a component? Follow this checklist:
 - [ ] Lazy load if heavy component: `React.lazy(() => import())`
 - [ ] Wrap in `<SuspenseLoader>` for loading states
 - [ ] Use `useSuspenseQuery` for data fetching
-- [ ] Import aliases: `@/`, `~types`, `~components`, `~features`
+- [ ] Import aliases: `@/`, `~types`, `~components`
 - [ ] Styles: Inline if <100 lines, separate file if >100 lines
 - [ ] Use `useCallback` for event handlers passed to children
 - [ ] Default export at bottom
 - [ ] No early returns with loading spinners
 - [ ] Use `useMuiSnackbar` for user notifications
-
-### New Feature Checklist
-
-Creating a feature? Set up this structure:
-
-- [ ] Create `features/{feature-name}/` directory
-- [ ] Create subdirectories: `api/`, `components/`, `hooks/`, `helpers/`, `types/`
-- [ ] Create API service file: `api/{feature}Api.ts`
-- [ ] Set up TypeScript types in `types/`
-- [ ] Create route in `routes/{feature-name}/index.tsx`
-- [ ] Lazy load feature components
-- [ ] Use Suspense boundaries
-- [ ] Export public API from feature `index.ts`
 
 ---
 
@@ -61,7 +47,6 @@ Creating a feature? Set up this structure:
 | `@/`          | `src/`           | `import { apiClient } from '@/lib/apiClient'`                 |
 | `~types`      | `src/types`      | `import type { User } from '~types/user'`                     |
 | `~components` | `src/components` | `import { SuspenseLoader } from '~components/SuspenseLoader'` |
-| `~features`   | `src/features`   | `import { authApi } from '~features/auth'`                    |
 
 Defined in: [vite.config.ts](../../vite.config.ts) lines 180-185
 
@@ -130,9 +115,8 @@ import type { Post } from "~types/post";
 
 **API Service Layer:**
 
-- Create `features/{feature}/api/{feature}Api.ts`
 - Use `apiClient` axios instance
-- Centralized methods per feature
+- Centralized methods per resource in `services/`
 - Route format: `/form/route` (NOT `/api/form/route`)
 
 **[📖 Complete Guide: resources/data-fetching.md](resources/data-fetching.md)**
@@ -141,22 +125,9 @@ import type { Post } from "~types/post";
 
 ### 📁 File Organization
 
-**features/ vs components/:**
+**components/:**
 
-- `features/`: Domain-specific (posts, comments, auth)
 - `components/`: Truly reusable (SuspenseLoader, CustomAppBar)
-
-**Feature Subdirectories:**
-
-```
-features/
-  my-feature/
-    api/          # API service layer
-    components/   # Feature components
-    hooks/        # Custom hooks
-    helpers/      # Utility functions
-    types/        # TypeScript types
-```
 
 **[📖 Complete Guide: resources/file-organization.md](resources/file-organization.md)**
 
@@ -201,7 +172,7 @@ features/
 import { createFileRoute } from "@tanstack/react-router";
 import { lazy } from "react";
 
-const MyPage = lazy(() => import("@/features/my-feature/components/MyPage"));
+const MyPage = lazy(() => import("@/pages/MyPage"));
 
 export const Route = createFileRoute("/my-route/")({
   component: MyPage,
@@ -287,7 +258,6 @@ if (isLoading) {
 **Full working examples:**
 
 - Modern component with all patterns
-- Complete feature structure
 - API service layer
 - Route with lazy loading
 - Suspense + useSuspenseQuery
@@ -319,11 +289,10 @@ if (isLoading) {
 1. **Lazy Load Everything Heavy**: Routes, DataGrid, charts, editors
 2. **Suspense for Loading**: Use SuspenseLoader, not early returns
 3. **useSuspenseQuery**: Primary data fetching pattern for new code
-4. **Features are Organized**: api/, components/, hooks/, helpers/ subdirs
-5. **Styles Based on Size**: <100 inline, >100 separate
-6. **Import Aliases**: Use @/, ~types, ~components, ~features
-7. **No Early Returns**: Prevents layout shift
-8. **useMuiSnackbar**: For all user notifications
+4. **Styles Based on Size**: <100 inline, >100 separate
+5. **Import Aliases**: Use @/, ~types, ~components
+6. **No Early Returns**: Prevents layout shift
+7. **useMuiSnackbar**: For all user notifications
 
 ---
 
@@ -331,27 +300,24 @@ if (isLoading) {
 
 ```
 src/
-  features/
-    my-feature/
-      api/
-        myFeatureApi.ts       # API service
-      components/
-        MyFeature.tsx         # Main component
-        SubComponent.tsx      # Related components
-      hooks/
-        useMyFeature.ts       # Custom hooks
-        useSuspenseMyFeature.ts  # Suspense hooks
-      helpers/
-        myFeatureHelpers.ts   # Utilities
-      types/
-        index.ts              # TypeScript types
-      index.ts                # Public exports
-
   components/
-    SuspenseLoader/
-      SuspenseLoader.tsx      # Reusable loader
-    CustomAppBar/
-      CustomAppBar.tsx        # Reusable app bar
+    Message/
+      MessageThread.tsx       # Component folder per UI area
+    ui/                       # Shared UI primitives
+
+  pages/
+    Chat.tsx                  # Page components
+
+  services/
+    messages.ts               # API service
+
+  hooks/
+    useMessages.ts            # Custom hooks
+
+  interfaces/
+    message.ts                # TypeScript types
+
+  utils/                      # Utilities
 
   routes/
     my-route/
@@ -368,8 +334,7 @@ src/
 import React, { useState, useCallback } from 'react';
 import { Box, Paper } from '@mui/material';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { featureApi } from '../api/featureApi';
-import type { FeatureData } from '~types/feature';
+import { getItem } from '@/services/items';
 
 interface MyComponentProps {
     id: number;
@@ -380,8 +345,8 @@ export const MyComponent: React.FC<MyComponentProps> = ({ id, onAction }) => {
     const [state, setState] = useState<string>('');
 
     const { data } = useSuspenseQuery({
-        queryKey: ['feature', id],
-        queryFn: () => featureApi.getFeature(id),
+        queryKey: ['item', id],
+        queryFn: () => getItem(id),
     });
 
     const handleAction = useCallback(() => {
@@ -402,14 +367,3 @@ export default MyComponent;
 ```
 
 For complete examples, see [resources/complete-examples.md](resources/complete-examples.md)
-
----
-
-## Related Skills
-
-- **error-tracking**: Error tracking with Sentry (applies to frontend too)
-- **backend-dev-guidelines**: Backend API patterns that frontend consumes
-
----
-
-**Skill Status**: Modular structure with progressive loading for optimal context management

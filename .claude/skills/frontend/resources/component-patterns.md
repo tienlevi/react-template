@@ -131,7 +131,7 @@ import { SuspenseLoader } from '@/components/SuspenseLoader';
 **Route Level:**
 ```typescript
 // routes/my-route/index.tsx
-const MyPage = lazy(() => import('@/features/my-feature/components/MyPage'));
+const MyPage = lazy(() => import('@/pages/MyPage'));
 
 function Route() {
     return (
@@ -195,8 +195,8 @@ import { Box, Paper, Button } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 import { useSuspenseQuery } from '@tanstack/react-query';
 
-// Feature imports
-import { myFeatureApi } from '../api/myFeatureApi';
+// Service imports
+import { entityApi } from '@/services/entity';
 import type { MyData } from '~types/myData';
 
 // Component imports
@@ -244,7 +244,7 @@ export const MyComponent: React.FC<MyComponentProps> = ({
     // - Data fetching
     const { data } = useSuspenseQuery({
         queryKey: ['myEntity', entityId],
-        queryFn: () => myFeatureApi.getEntity(entityId),
+        queryFn: () => entityApi.getEntity(entityId),
     });
 
     // - Local state
@@ -271,7 +271,7 @@ export const MyComponent: React.FC<MyComponentProps> = ({
 
     const handleSave = useCallback(async () => {
         try {
-            await myFeatureApi.updateEntity(entityId, { /* data */ });
+            await entityApi.updateEntity(entityId, { /* data */ });
             showSuccess('Entity updated successfully');
             onComplete?.();
         } catch (error) {

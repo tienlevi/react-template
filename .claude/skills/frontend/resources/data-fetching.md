@@ -21,13 +21,13 @@ For **all new components**, use `useSuspenseQuery` instead of regular `useQuery`
 
 ```typescript
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { myFeatureApi } from '../api/myFeatureApi';
+import { entityApi } from '@/services/entity';
 
 export const MyComponent: React.FC<Props> = ({ id }) => {
     // No isLoading - Suspense handles it!
     const { data } = useSuspenseQuery({
         queryKey: ['myEntity', id],
-        queryFn: () => myFeatureApi.getEntity(id),
+        queryFn: () => entityApi.getEntity(id),
     });
 
     // data is ALWAYS defined here (not undefined | Data)
@@ -42,7 +42,7 @@ export const MyComponent: React.FC<Props> = ({ id }) => {
 
 ### useSuspenseQuery vs useQuery
 
-| Feature | useSuspenseQuery | useQuery |
+| Aspect | useSuspenseQuery | useQuery |
 |---------|------------------|----------|
 | Loading state | Handled by Suspense | Manual `isLoading` check |
 | Data type | Always defined | `Data \| undefined` |
@@ -67,7 +67,7 @@ export const MyComponent: React.FC<Props> = ({ id }) => {
 
 ```typescript
 import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query';
-import { postApi } from '../api/postApi';
+import { postApi } from '@/services/posts';
 
 export function useSuspensePost(postId: number) {
     const queryClient = useQueryClient();
@@ -199,26 +199,24 @@ queryClient.invalidateQueries({ queryKey: ['post'] });          // All posts
 
 ### File Structure
 
-Create centralized API service per feature:
+Create a centralized API service per resource:
 
 ```
-features/
-  my-feature/
-    api/
-      myFeatureApi.ts    # Service layer
+services/
+  entity.ts    # Service layer
 ```
 
 ### Service Pattern (from postApi.ts)
 
 ```typescript
 /**
- * Centralized API service for my-feature operations
+ * Centralized API service for entity operations
  * Uses apiClient for consistent error handling
  */
 import apiClient from '@/lib/apiClient';
-import type { MyEntity, UpdatePayload } from '../types';
+import type { MyEntity, UpdatePayload } from '@/interfaces/entity';
 
-export const myFeatureApi = {
+export const entityApi = {
     /**
      * Fetch a single entity
      */
@@ -305,7 +303,7 @@ await apiClient.post('/api/projects/create', data); // WRONG!
 
 ```typescript
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { myFeatureApi } from '../api/myFeatureApi';
+import { entityApi } from '@/services/entity';
 import { useMuiSnackbar } from '@/hooks/useMuiSnackbar';
 
 export const MyComponent: React.FC = () => {
@@ -314,7 +312,7 @@ export const MyComponent: React.FC = () => {
 
     const updateMutation = useMutation({
         mutationFn: (payload: UpdatePayload) =>
-            myFeatureApi.updateEntity(blogId, entityId, payload),
+            entityApi.updateEntity(blogId, entityId, payload),
 
         onSuccess: () => {
             // Invalidate and refetch
@@ -349,7 +347,7 @@ export const MyComponent: React.FC = () => {
 
 ```typescript
 const updateMutation = useMutation({
-    mutationFn: (payload) => myFeatureApi.update(id, payload),
+    mutationFn: (payload) => entityApi.update(id, payload),
 
     // Optimistic update
     onMutate: async (newData) => {
@@ -395,7 +393,7 @@ export function usePrefetchEntity() {
     return (blogId: number, entityId: number) => {
         return queryClient.prefetchQuery({
             queryKey: ['entity', blogId, entityId],
-            queryFn: () => myFeatureApi.getEntity(blogId, entityId),
+            queryFn: () => entityApi.getEntity(blogId, entityId),
             staleTime: 5 * 60 * 1000,
         });
     };
@@ -473,7 +471,7 @@ const { showError } = useMuiSnackbar();
 
 const { data } = useSuspenseQuery({
     queryKey: ['entity', id],
-    queryFn: () => myFeatureApi.getEntity(id),
+    queryFn: () => entityApi.getEntity(id),
 
     // Handle errors
     onError: (error) => {
@@ -510,7 +508,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 import React from 'react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { Box, Typography } from '@mui/material';
-import { userApi } from '../api/userApi';
+import { userApi } from '@/services/users';
 
 interface UserProfileProps {
     userId: string;
@@ -541,8 +539,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({ userId }) => {
 
 ```typescript
 import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query';
-import { postApi } from '../api/postApi';
-import type { Post } from '../types';
+import { postApi } from '@/services/posts';
+import type { Post } from '@/interfaces/post';
 
 /**
  * Hook with cache-first strategy
@@ -628,7 +626,7 @@ export const Dashboard: React.FC = () => {
 
 ```typescript
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { postApi } from '../api/postApi';
+import { postApi } from '@/services/posts';
 import { useMuiSnackbar } from '@/hooks/useMuiSnackbar';
 
 export const useUpdatePost = () => {
@@ -752,7 +750,7 @@ useSuspenseQuery({
 
 **Modern Data Fetching Recipe:**
 
-1. **Create API Service**: `features/X/api/XApi.ts` using apiClient
+1. **Create API Service**: `services/x.ts` using apiClient
 2. **Use useSuspenseQuery**: In components wrapped by SuspenseLoader
 3. **Cache-First**: Check grid cache before API call
 4. **Query Keys**: Consistent naming ['entity', id]

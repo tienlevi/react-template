@@ -17,7 +17,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Box, Paper, Typography, Button, Avatar } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 import { useSuspenseQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { userApi } from '../api/userApi';
+import { userApi } from '@/services/users';
 import { useMuiSnackbar } from '@/hooks/useMuiSnackbar';
 import type { User } from '~types/user';
 
@@ -154,38 +154,31 @@ export default UserProfile;
 
 ---
 
-## Example 2: Complete Feature Structure
+## Example 2: Complete User Module
 
-Real example based on `features/posts/`:
+Files for the user domain, spread across the top-level directories:
 
 ```
-features/
-  users/
-    api/
-      userApi.ts                # API service layer
-    components/
+src/
+  services/
+    users.ts                    # API service layer
+  components/
+    User/
       UserProfile.tsx           # Main component (from Example 1)
       UserList.tsx              # List component
-      UserBlog.tsx              # Blog component
-      modals/
-        DeleteUserModal.tsx     # Modal component
-    hooks/
-      useSuspenseUser.ts        # Suspense query hook
-      useUserMutations.ts       # Mutation hooks
-      useUserPermissions.ts     # Feature-specific hook
-    helpers/
-      userHelpers.ts            # Utility functions
-      validation.ts             # Validation logic
-    types/
-      index.ts                  # TypeScript interfaces
-    index.ts                    # Public API exports
+      DeleteUserModal.tsx       # Modal component
+  hooks/
+    useSuspenseUser.ts          # Suspense query hook
+    useUserMutations.ts         # Mutation hooks
+  interfaces/
+    user.ts                     # TypeScript interfaces
 ```
 
-### API Service (userApi.ts)
+### API Service (services/users.ts)
 
 ```typescript
 import apiClient from '@/lib/apiClient';
-import type { User, CreateUserPayload, UpdateUserPayload } from '../types';
+import type { User, CreateUserPayload, UpdateUserPayload } from '@/interfaces/user';
 
 export const userApi = {
     getUser: async (userId: string): Promise<User> => {
@@ -218,8 +211,8 @@ export const userApi = {
 
 ```typescript
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { userApi } from '../api/userApi';
-import type { User } from '../types';
+import { userApi } from '@/services/users';
+import type { User } from '@/interfaces/user';
 
 export function useSuspenseUser(userId: string) {
     return useSuspenseQuery<User, Error>({
@@ -239,7 +232,7 @@ export function useSuspenseUsers() {
 }
 ```
 
-### Types (types/index.ts)
+### Types (interfaces/user.ts)
 
 ```typescript
 export interface User {
@@ -264,24 +257,6 @@ export interface CreateUserPayload {
 export type UpdateUserPayload = Partial<Omit<User, 'id' | 'createdAt' | 'updatedAt'>>;
 ```
 
-### Public Exports (index.ts)
-
-```typescript
-// Export components
-export { UserProfile } from './components/UserProfile';
-export { UserList } from './components/UserList';
-
-// Export hooks
-export { useSuspenseUser, useSuspenseUsers } from './hooks/useSuspenseUser';
-export { useUserMutations } from './hooks/useUserMutations';
-
-// Export API
-export { userApi } from './api/userApi';
-
-// Export types
-export type { User, CreateUserPayload, UpdateUserPayload } from './types';
-```
-
 ---
 
 ## Example 3: Complete Route with Lazy Loading
@@ -298,7 +273,7 @@ import { SuspenseLoader } from '~components/SuspenseLoader';
 
 // Lazy load the UserProfile component
 const UserProfile = lazy(() =>
-    import('@/features/users/components/UserProfile').then(
+    import('@/components/User/UserProfile').then(
         (module) => ({ default: module.UserProfile })
     )
 );
@@ -335,7 +310,7 @@ import React, { useState, useMemo } from 'react';
 import { Box, TextField, List, ListItem } from '@mui/material';
 import { useDebounce } from 'use-debounce';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { userApi } from '../api/userApi';
+import { userApi } from '@/services/users';
 
 export const UserList: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -389,7 +364,7 @@ import { useBlog } from 'react-hook-blog';
 import { zodResolver } from '@hookblog/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { userApi } from '../api/userApi';
+import { userApi } from '@/services/users';
 import { useMuiSnackbar } from '@/hooks/useMuiSnackbar';
 
 const userSchema = z.object({
@@ -545,8 +520,8 @@ Complete example based on useSuspensePost.ts:
 
 ```typescript
 import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query';
-import { postApi } from '../api/postApi';
-import type { Post } from '../types';
+import { postApi } from '@/services/posts';
+import type { Post } from '@/interfaces/post';
 
 /**
  * Smart post hook with cache-first strategy
@@ -610,7 +585,7 @@ import { lazy } from 'react';
 
 // Lazy load the PostTable component
 const PostTable = lazy(() =>
-    import('@/features/posts/components/PostTable').then(
+    import('@/components/Posts/PostTable').then(
         (module) => ({ default: module.PostTable })
     )
 );
@@ -750,9 +725,9 @@ export const AddUserDialog: React.FC<AddUserDialogProps> = ({
 import React from 'react';
 import { Box, Grid, Paper } from '@mui/material';
 import { useSuspenseQueries } from '@tanstack/react-query';
-import { userApi } from '../api/userApi';
-import { statsApi } from '../api/statsApi';
-import { activityApi } from '../api/activityApi';
+import { userApi } from '@/services/users';
+import { statsApi } from '@/services/stats';
+import { activityApi } from '@/services/activity';
 
 export const Dashboard: React.FC = () => {
     // Fetch all data in parallel with Suspense
@@ -813,7 +788,7 @@ export const Dashboard: React.FC = () => {
 
 ```typescript
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { User } from '../types';
+import type { User } from '@/interfaces/user';
 
 export const useToggleUserStatus = () => {
     const queryClient = useQueryClient();
@@ -861,7 +836,7 @@ export const useToggleUserStatus = () => {
 **Key Takeaways:**
 
 1. **Component Pattern**: React.FC + lazy + Suspense + useSuspenseQuery
-2. **Feature Structure**: Organized subdirectories (api/, components/, hooks/, etc.)
+2. **File Structure**: services/, components/, hooks/, interfaces/
 3. **Routing**: Folder-based with lazy loading
 4. **Data Fetching**: useSuspenseQuery with cache-first strategy
 5. **Blogs**: React Hook Blog + Zod validation
