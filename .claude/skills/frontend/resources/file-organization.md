@@ -1,308 +1,163 @@
 # File Organization
 
-Proper file and directory structure for maintainable, scalable frontend code in the the application.
+Where each kind of file goes in `frontend/src/` and how to name it.
 
 ---
 
 ## Top-Level Directories
 
-| Directory | Purpose |
-|-----------|---------|
-| `components/` | UI components, one folder per UI area (`Message/`, `Friend/`, `NavRail/`) |
-| `components/ui/` | Shared UI primitives |
-| `components/layouts/` | Layout components |
-| `pages/` | Page components rendered by routes |
-| `routes/` | Route definitions |
-| `services/` | API service layer, one file per resource |
-| `hooks/` | Custom hooks (queries, mutations, utilities) |
-| `interfaces/` | TypeScript types and interfaces |
-| `contexts/` | React contexts |
-| `constants/` | Constants |
-| `utils/` | Utility functions |
-| `lib/` | Library setup (API client, helpers) |
-| `locales/` | Translations |
+| Directory             | Purpose                                                                | Example                                   |
+| --------------------- | ---------------------------------------------------------------------- | ----------------------------------------- |
+| `assets/css/`         | Tailwind entry, theme tokens, custom utilities/animations              | `index.css`                               |
+| `assets/images/`      | Images imported from code                                              | `chatapp-logo.svg`                        |
+| `components/`         | UI components, one PascalCase folder per UI area                       | `Message/`, `Friend/`, `NavRail/`         |
+| `components/ui/`      | shadcn/ui primitives (generated, lowercase file names)                 | `button.tsx`, `scroll-area.tsx`           |
+| `components/layouts/` | Layout wrappers used by routes                                         | `ChatLayout.tsx`                          |
+| `constants/`          | Env-derived config, keys, query keys                                   | `index.ts`, `query-key.ts`, `images.ts`   |
+| `contexts/`           | React context providers (+ their consumer hook)                        | `QueryContext.tsx`, `ThemeContext.tsx`    |
+| `hooks/`              | Custom hooks: TanStack Query wrappers and generic hooks                | `useFriends.ts`, `useDebounce.ts`         |
+| `interfaces/`         | TypeScript types/interfaces, one file per domain                       | `user.ts`, `message.ts`, `friend.ts`      |
+| `lib/`                | `cn()` helper (shadcn alias `@/lib`)                                   | `utils.ts`                                |
+| `locales/`            | i18n JSON resources                                                    | `en.json`, `vi.json`                      |
+| `pages/`              | Route-level components (thin)                                          | `Chat.tsx`, `Friends.tsx`                 |
+| `routes/`             | Route config array and guards                                          | `routes.tsx`, `AuthGuard.tsx`             |
+| `services/`           | API calls, one file per backend resource                               | `friends.ts`, `messages.ts`, `auth.ts`    |
+| `utils/`              | Pure helpers + infrastructure setup (axios, i18n, zod schemas)         | `axios.ts`, `validations.ts`, `format.ts` |
+| `public/`             | (outside src) static files served as-is, e.g. `/emoji/like.png`        |                                           |
 
 ---
 
-## components/ Directory
+## components/
 
-**Purpose**: UI components, grouped by UI area
-
-**Organization:**
-- One folder per UI area, named in PascalCase
-- Truly reusable primitives go in `components/ui/`
-
-**Structure:**
 ```
 components/
+  ui/                       # shadcn – don't hand-edit unless needed; add with `pnpm dlx shadcn@latest add <name>`
+  layouts/
+    ChatLayout.tsx
   Message/
+    index.tsx               # main component of the area (import "@/components/Message")
+    MessageHeader.tsx
     MessageThread.tsx
+    MessageBubble.tsx
+    MessageComposer.tsx
   Friend/
-    FriendList.tsx
-  ui/
-    button.tsx
+    index.tsx
+    FriendHeader.tsx
+    FriendRequests.tsx
+    FriendsBlocked.tsx
+    CommonFriends.tsx
+    SearchFriends.tsx
+  LoginForm/index.tsx
+  RegisterForm/index.tsx + Avatar.tsx
+  UserAvatar.tsx            # shared single-file component used across areas
+```
+
+Rules:
+
+- A new UI area → new folder `components/<Area>/index.tsx`. Sub-parts sit next to it, named `<Area><Part>.tsx` (e.g. `MessageBubble.tsx`).
+- Inside the folder import siblings with `./` (`import MessageThread from "./MessageThread"`).
+- A component used by several areas and small enough for one file → `components/<Name>.tsx` (like `UserAvatar.tsx`) or `components/<Name>/index.tsx`.
+- Primitives (button, input, dialog...) come from shadcn in `components/ui/`, don't recreate them.
+
+---
+
+## pages/
+
+Pages are thin: read hooks/URL params, pass props into components.
+
+```tsx
+// pages/Friends.tsx
+import Friend from "@/components/Friend";
+
+function Friends() {
+  return <Friend />;
+}
+
+export default Friends;
+```
+
+`pages/Chat.tsx` reads `receiverId` from `useSearchParams`, calls `useAuth`, `useFriends`, `useMessages` and passes data to `Conversations` and `Message`.
+
+---
+
+## services/ → hooks/ → components
+
+```
+services/friends.ts       getFriendsByUserId, searchFriends, addFriend, acceptFriend, blockFriend ...
+hooks/useFriends.ts       useQuery wrappers  (QUERY_KEY.FRIENDS)
+hooks/useAddFriend.ts     useMutation + invalidateQueries
+hooks/useBlockFriend.ts
+components/Friend/*       use the hooks / receive data as props
+```
+
+- One service file per backend resource (`/auth`, `/users`, `/friends`, `/message`, `/token`), plus `cloudinary.ts` for uploads.
+- One hook file per query/mutation concern, default-exported, named `use<Thing>`.
+
+See [data-fetching.md](data-fetching.md).
+
+---
+
+## interfaces/
+
+One file per domain. Models from the backend are `I`-prefixed interfaces; unions/aliases are `type`.
+
+```
+interfaces/user.ts      default export IUser
+interfaces/friend.ts    IFriend, FriendListItem, type FriendTab
+interfaces/message.ts   IMessage, MessageFile, type MessageEmoji, type MessageFileType
+interfaces/chat.ts      type PresenceStatus, type ConversationFilter
+interfaces/routes.ts    type Routes
+interfaces/token.ts
 ```
 
 ---
 
-## services/ Directory
+## constants/
 
-**Purpose**: Centralized API calls, one file per resource
+- `constants/index.ts` – `baseApi`, `VITE_*` env values, `ACCESS_TOKEN_KEY`, `REFRESH_TOKEN_KEY`, `defaultAvatar`.
+- `constants/query-key.ts` – add a new key here when adding a new resource:
 
-**Files:**
-- `services/messages.ts`, `services/users.ts`, `services/friends.ts`
-
-**Pattern:**
 ```typescript
-// services/items.ts
-import apiClient from '@/lib/apiClient';
-
-export const getItem = async (id: number) => {
-    const { data } = await apiClient.get(`/items/${id}`);
-    return data;
+export const QUERY_KEY = {
+  USER: "user",
+  MESSAGE: "message",
+  FRIENDS: "friends",
 };
-
-export const createItem = async (payload) => {
-    const { data } = await apiClient.post('/items', payload);
-    return data;
-};
 ```
 
 ---
 
-## hooks/ Directory
+## utils/
 
-**Purpose**: Custom hooks, including TanStack Query wrappers around services
+| File             | Contents                                                         |
+| ---------------- | ---------------------------------------------------------------- |
+| `axios.ts`       | `instance` (API, token + refresh interceptors), `cloudinaryApi`  |
+| `i18n.ts`        | i18next init, `SUPPORTED_LANGUAGES`                              |
+| `validations.ts` | zod schema factories + inferred form value types                 |
+| `format.ts`      | formatting helpers (`formatISODateToTimestamp`, ...)             |
+| `datetime.ts`    | date/time helpers                                                |
+| `message.ts`     | message helpers (`getThread`, ...)                               |
+| `cropImage.ts`   | canvas crop for avatar upload                                    |
 
-**Naming:**
-- `use` prefix (camelCase)
-- Descriptive of what they do
-
-**Examples:**
-```
-hooks/
-  useMessages.ts                # Query hook
-  useAddFriend.ts               # Mutation hook
-  useDebounce.ts                # Utility hook
-```
+Pure, framework-free helpers go in `utils/`. Anything with React hooks goes in `hooks/`.
 
 ---
 
-## interfaces/ Directory
+## Naming
 
-**Purpose**: TypeScript types and interfaces, one file per domain
+| Kind                   | Convention                           | Example                         |
+| ---------------------- | ------------------------------------ | ------------------------------- |
+| Component folder/file  | PascalCase                           | `Message/MessageBubble.tsx`     |
+| shadcn primitive       | lowercase kebab                      | `ui/dropdown-menu.tsx`          |
+| Hook                   | `use` + PascalCase, camelCase file   | `useAcceptDelineFriend.ts`      |
+| Service / util file    | camelCase / lowercase                | `services/messages.ts`          |
+| Constants file         | kebab-case                           | `constants/query-key.ts`        |
+| Model interface        | `I` + PascalCase                     | `IMessage`, `IFriend`, `IUser`  |
+| Constant values        | UPPER_SNAKE_CASE                     | `QUERY_KEY`, `ACCESS_TOKEN_KEY` |
+| Boolean                | `is` / `has` / `should` prefix       | `isLoadingUsers`, `isActive`    |
 
-**Files:**
-```
-interfaces/
-  message.ts
-  user.ts
-  friend.ts
-```
+## Don'ts
 
----
-
-## Import Aliases (Vite Configuration)
-
-### Available Aliases
-
-| Alias | Resolves To | Use For |
-|-------|-------------|---------|
-| `@/` | `src/` | Absolute imports from src root |
-| `~types` | `src/types` | Shared TypeScript types |
-| `~components` | `src/components` | Reusable components |
-
-### Usage Examples
-
-```typescript
-// ✅ PREFERRED - Use aliases for absolute imports
-import { apiClient } from '@/lib/apiClient';
-import { SuspenseLoader } from '~components/SuspenseLoader';
-import { getPosts } from '@/services/posts';
-import type { User } from '~types/user';
-
-// ❌ AVOID - Relative paths from deep nesting
-import { apiClient } from '../../../lib/apiClient';
-import { SuspenseLoader } from '../../../components/SuspenseLoader';
-```
-
-### When to Use Which Alias
-
-**@/ (General)**:
-- Lib utilities: `@/lib/apiClient`
-- Hooks: `@/hooks/useAuth`
-- Config: `@/config/theme`
-- Services: `@/services/auth`
-
-**~types (Type Imports)**:
-```typescript
-import type { Post } from '~types/post';
-import type { User, UserRole } from '~types/user';
-```
-
-**~components (Reusable Components)**:
-```typescript
-import { SuspenseLoader } from '~components/SuspenseLoader';
-import { CustomAppBar } from '~components/CustomAppBar';
-import { ErrorBoundary } from '~components/ErrorBoundary';
-```
-
----
-
-## File Naming Conventions
-
-### Components
-
-**Pattern**: PascalCase with `.tsx` extension
-
-```
-MyComponent.tsx
-PostDataGrid.tsx
-CustomAppBar.tsx
-```
-
-**Avoid:**
-- camelCase: `myComponent.tsx` ❌
-- kebab-case: `my-component.tsx` ❌
-- All caps: `MYCOMPONENT.tsx` ❌
-
-### Hooks
-
-**Pattern**: camelCase with `use` prefix, `.ts` extension
-
-```
-useMessages.ts
-useSuspensePost.ts
-useAuth.ts
-useDebounce.ts
-```
-
-### API Services
-
-**Pattern**: camelCase resource name, `.ts` extension
-
-```
-messages.ts
-posts.ts
-users.ts
-```
-
-### Helpers/Utilities
-
-**Pattern**: camelCase with descriptive name, `.ts` extension
-
-```
-formatDate.ts
-validation.ts
-constants.ts
-```
-
-### Types
-
-**Pattern**: camelCase domain name
-
-```
-interfaces/post.ts
-interfaces/user.ts
-```
-
----
-
-## When to Create a Reusable Component
-
-- Used in 3+ places
-- Generic, no domain logic
-- Pure presentation
-- Shared pattern
-
-**Example:** `components/SuspenseLoader/`
-
----
-
-## Import Organization
-
-### Import Order (Recommended)
-
-```typescript
-// 1. React and React-related
-import React, { useState, useCallback, useMemo } from 'react';
-import { lazy } from 'react';
-
-// 2. Third-party libraries (alphabetical)
-import { Box, Paper, Button, Grid } from '@mui/material';
-import type { SxProps, Theme } from '@mui/material';
-import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
-
-// 3. Alias imports (@ first, then ~)
-import { apiClient } from '@/lib/apiClient';
-import { useAuth } from '@/hooks/useAuth';
-import { useMuiSnackbar } from '@/hooks/useMuiSnackbar';
-import { getPosts } from '@/services/posts';
-import { SuspenseLoader } from '~components/SuspenseLoader';
-
-// 4. Type imports (grouped)
-import type { Post } from '~types/post';
-import type { User } from '~types/user';
-
-// 5. Relative imports (same folder)
-import { MySubComponent } from './MySubComponent';
-```
-
-**Use single quotes** for all imports (project standard)
-
----
-
-## Directory Structure Visualization
-
-```
-src/
-├── components/                  # UI components
-│   ├── Message/
-│   ├── Friend/
-│   ├── layouts/
-│   └── ui/
-│
-├── pages/                       # Page components
-│   ├── Chat.tsx
-│   └── Friends.tsx
-│
-├── routes/                      # Route definitions
-│
-├── services/                    # API service layer
-│   ├── messages.ts
-│   └── users.ts
-│
-├── hooks/                       # Custom hooks
-│   ├── useAuth.ts
-│   ├── useMessages.ts
-│   └── useDebounce.ts
-│
-├── interfaces/                  # TypeScript types
-│   ├── message.ts
-│   └── user.ts
-│
-├── contexts/                    # React contexts
-├── constants/                   # Constants
-├── lib/                         # Library setup
-├── utils/                       # Utilities
-├── locales/                     # Translations
-│
-└── App.tsx                      # Root component
-```
-
----
-
-## Summary
-
-**Key Principles:**
-1. **components/** grouped by UI area, primitives in `components/ui/`
-2. **services/** for API calls, **hooks/** for queries and mutations
-3. **interfaces/** for TypeScript types
-4. Import aliases for clean imports (@/, ~types, ~components)
-5. Consistent naming: PascalCase components, camelCase utilities
-
-**See Also:**
-- [component-patterns.md](component-patterns.md) - Component structure
-- [data-fetching.md](data-fetching.md) - API service patterns
-- [complete-examples.md](complete-examples.md) - Full examples
+- Don't create new top-level directories (`features/`, `types/`, `api/`, `store/`...) without being asked.
+- Don't put axios calls in components or hooks other than via `services/`.
+- Don't use relative `../../` across directories; use `@/`.

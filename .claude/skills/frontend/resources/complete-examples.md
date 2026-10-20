@@ -1,847 +1,220 @@
-# Complete Examples
+# Complete Example: "Pinned messages" feature
 
-Full working examples combining all modern patterns: React.FC, lazy loading, Suspense, useSuspenseQuery, styling, routing, and error handling.
+End-to-end walkthrough touching every layer in the order you'd write it. Adapt names to the real feature.
 
 ---
 
-## Example 1: Complete Modern Component
-
-Combines: React.FC, useSuspenseQuery, cache-first, useCallback, styling, error handling
+## 1. Type — `interfaces/message.ts`
 
 ```typescript
-/**
- * User profile display component
- * Demonstrates modern patterns with Suspense and TanStack Query
- */
-import React, { useState, useCallback, useMemo } from 'react';
-import { Box, Paper, Typography, Button, Avatar } from '@mui/material';
-import type { SxProps, Theme } from '@mui/material';
-import { useSuspenseQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { userApi } from '@/services/users';
-import { useMuiSnackbar } from '@/hooks/useMuiSnackbar';
-import type { User } from '~types/user';
-
-// Styles object
-const componentStyles: Record<string, SxProps<Theme>> = {
-    container: {
-        p: 3,
-        maxWidth: 600,
-        margin: '0 auto',
-    },
-    header: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: 2,
-        mb: 3,
-    },
-    content: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 2,
-    },
-    actions: {
-        display: 'flex',
-        gap: 1,
-        mt: 2,
-    },
-};
-
-interface UserProfileProps {
-    userId: string;
-    onUpdate?: () => void;
+export interface IPinnedMessage {
+  _id: string;
+  messageId: string;
+  conversationId: string;
+  pinnedBy: string;
+  createdAt: string;
 }
-
-export const UserProfile: React.FC<UserProfileProps> = ({ userId, onUpdate }) => {
-    const queryClient = useQueryClient();
-    const { showSuccess, showError } = useMuiSnackbar();
-    const [isEditing, setIsEditing] = useState(false);
-
-    // Suspense query - no isLoading needed!
-    const { data: user } = useSuspenseQuery({
-        queryKey: ['user', userId],
-        queryFn: () => userApi.getUser(userId),
-        staleTime: 5 * 60 * 1000,
-    });
-
-    // Update mutation
-    const updateMutation = useMutation({
-        mutationFn: (updates: Partial<User>) =>
-            userApi.updateUser(userId, updates),
-
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['user', userId] });
-            showSuccess('Profile updated');
-            setIsEditing(false);
-            onUpdate?.();
-        },
-
-        onError: () => {
-            showError('Failed to update profile');
-        },
-    });
-
-    // Memoized computed value
-    const fullName = useMemo(() => {
-        return `${user.firstName} ${user.lastName}`;
-    }, [user.firstName, user.lastName]);
-
-    // Event handlers with useCallback
-    const handleEdit = useCallback(() => {
-        setIsEditing(true);
-    }, []);
-
-    const handleSave = useCallback(() => {
-        updateMutation.mutate({
-            firstName: user.firstName,
-            lastName: user.lastName,
-        });
-    }, [user, updateMutation]);
-
-    const handleCancel = useCallback(() => {
-        setIsEditing(false);
-    }, []);
-
-    return (
-        <Paper sx={componentStyles.container}>
-            <Box sx={componentStyles.header}>
-                <Avatar sx={{ width: 64, height: 64 }}>
-                    {user.firstName[0]}{user.lastName[0]}
-                </Avatar>
-                <Box>
-                    <Typography variant='h5'>{fullName}</Typography>
-                    <Typography color='text.secondary'>{user.email}</Typography>
-                </Box>
-            </Box>
-
-            <Box sx={componentStyles.content}>
-                <Typography>Username: {user.username}</Typography>
-                <Typography>Roles: {user.roles.join(', ')}</Typography>
-            </Box>
-
-            <Box sx={componentStyles.actions}>
-                {!isEditing ? (
-                    <Button variant='contained' onClick={handleEdit}>
-                        Edit Profile
-                    </Button>
-                ) : (
-                    <>
-                        <Button
-                            variant='contained'
-                            onClick={handleSave}
-                            disabled={updateMutation.isPending}
-                        >
-                            {updateMutation.isPending ? 'Saving...' : 'Save'}
-                        </Button>
-                        <Button onClick={handleCancel}>
-                            Cancel
-                        </Button>
-                    </>
-                )}
-            </Box>
-        </Paper>
-    );
-};
-
-export default UserProfile;
 ```
 
-**Usage:**
-```typescript
-<SuspenseLoader>
-    <UserProfile userId='123' onUpdate={() => console.log('Updated')} />
-</SuspenseLoader>
-```
-
----
-
-## Example 2: Complete User Module
-
-Files for the user domain, spread across the top-level directories:
-
-```
-src/
-  services/
-    users.ts                    # API service layer
-  components/
-    User/
-      UserProfile.tsx           # Main component (from Example 1)
-      UserList.tsx              # List component
-      DeleteUserModal.tsx       # Modal component
-  hooks/
-    useSuspenseUser.ts          # Suspense query hook
-    useUserMutations.ts         # Mutation hooks
-  interfaces/
-    user.ts                     # TypeScript interfaces
-```
-
-### API Service (services/users.ts)
+## 2. Query key — `constants/query-key.ts`
 
 ```typescript
-import apiClient from '@/lib/apiClient';
-import type { User, CreateUserPayload, UpdateUserPayload } from '@/interfaces/user';
-
-export const userApi = {
-    getUser: async (userId: string): Promise<User> => {
-        const { data } = await apiClient.get(`/users/${userId}`);
-        return data;
-    },
-
-    getUsers: async (): Promise<User[]> => {
-        const { data } = await apiClient.get('/users');
-        return data;
-    },
-
-    createUser: async (payload: CreateUserPayload): Promise<User> => {
-        const { data } = await apiClient.post('/users', payload);
-        return data;
-    },
-
-    updateUser: async (userId: string, payload: UpdateUserPayload): Promise<User> => {
-        const { data } = await apiClient.put(`/users/${userId}`, payload);
-        return data;
-    },
-
-    deleteUser: async (userId: string): Promise<void> => {
-        await apiClient.delete(`/users/${userId}`);
-    },
+export const QUERY_KEY = {
+  USER: "user",
+  MESSAGE: "message",
+  FRIENDS: "friends",
+  PINNED: "pinned",
 };
 ```
 
-### Suspense Hook (useSuspenseUser.ts)
+## 3. Service — `services/messages.ts`
 
 ```typescript
-import { useSuspenseQuery } from '@tanstack/react-query';
-import { userApi } from '@/services/users';
-import type { User } from '@/interfaces/user';
+import type { IPinnedMessage } from "@/interfaces/message";
+import { instance } from "@/utils/axios";
 
-export function useSuspenseUser(userId: string) {
-    return useSuspenseQuery<User, Error>({
-        queryKey: ['user', userId],
-        queryFn: () => userApi.getUser(userId),
-        staleTime: 5 * 60 * 1000,
-        gcTime: 10 * 60 * 1000,
-    });
-}
+export const getPinnedMessages = async (receiverId: string) => {
+  const response = await instance.get<IPinnedMessage[]>(`/message/pinned/${receiverId}`);
+  return response.data;
+};
 
-export function useSuspenseUsers() {
-    return useSuspenseQuery<User[], Error>({
-        queryKey: ['users'],
-        queryFn: () => userApi.getUsers(),
-        staleTime: 1 * 60 * 1000,  // Shorter for list
-    });
-}
-```
-
-### Types (interfaces/user.ts)
-
-```typescript
-export interface User {
-    id: string;
-    username: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    roles: string[];
-    createdAt: string;
-    updatedAt: string;
-}
-
-export interface CreateUserPayload {
-    username: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    password: string;
-}
-
-export type UpdateUserPayload = Partial<Omit<User, 'id' | 'createdAt' | 'updatedAt'>>;
-```
-
----
-
-## Example 3: Complete Route with Lazy Loading
-
-```typescript
-/**
- * User profile route
- * Path: /users/:userId
- */
-
-import { createFileRoute } from '@tanstack/react-router';
-import { lazy } from 'react';
-import { SuspenseLoader } from '~components/SuspenseLoader';
-
-// Lazy load the UserProfile component
-const UserProfile = lazy(() =>
-    import('@/components/User/UserProfile').then(
-        (module) => ({ default: module.UserProfile })
-    )
-);
-
-export const Route = createFileRoute('/users/$userId')({
-    component: UserProfilePage,
-    loader: ({ params }) => ({
-        crumb: `User ${params.userId}`,
-    }),
-});
-
-function UserProfilePage() {
-    const { userId } = Route.useParams();
-
-    return (
-        <SuspenseLoader>
-            <UserProfile
-                userId={userId}
-                onUpdate={() => console.log('Profile updated')}
-            />
-        </SuspenseLoader>
-    );
-}
-
-export default UserProfilePage;
-```
-
----
-
-## Example 4: List with Search and Filtering
-
-```typescript
-import React, { useState, useMemo } from 'react';
-import { Box, TextField, List, ListItem } from '@mui/material';
-import { useDebounce } from 'use-debounce';
-import { useSuspenseQuery } from '@tanstack/react-query';
-import { userApi } from '@/services/users';
-
-export const UserList: React.FC = () => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [debouncedSearch] = useDebounce(searchTerm, 300);
-
-    const { data: users } = useSuspenseQuery({
-        queryKey: ['users'],
-        queryFn: () => userApi.getUsers(),
-    });
-
-    // Memoized filtering
-    const filteredUsers = useMemo(() => {
-        if (!debouncedSearch) return users;
-
-        return users.filter(user =>
-            user.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-            user.email.toLowerCase().includes(debouncedSearch.toLowerCase())
-        );
-    }, [users, debouncedSearch]);
-
-    return (
-        <Box>
-            <TextField
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder='Search users...'
-                fullWidth
-                sx={{ mb: 2 }}
-            />
-
-            <List>
-                {filteredUsers.map(user => (
-                    <ListItem key={user.id}>
-                        {user.name} - {user.email}
-                    </ListItem>
-                ))}
-            </List>
-        </Box>
-    );
+export const pinMessage = async (messageId: string) => {
+  const response = await instance.post(`/message/pin/${messageId}`);
+  return response.data;
 };
 ```
 
----
-
-## Example 5: Blog with Validation
+## 4. Hooks — `hooks/usePinnedMessages.ts`, `hooks/usePinMessage.ts`
 
 ```typescript
-import React from 'react';
-import { Box, TextField, Button, Paper } from '@mui/material';
-import { useBlog } from 'react-hook-blog';
-import { zodResolver } from '@hookblog/resolvers/zod';
-import { z } from 'zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { userApi } from '@/services/users';
-import { useMuiSnackbar } from '@/hooks/useMuiSnackbar';
+import { QUERY_KEY } from "@/constants/query-key";
+import type { IPinnedMessage } from "@/interfaces/message";
+import { getPinnedMessages } from "@/services/messages";
+import { useQuery } from "@tanstack/react-query";
 
-const userSchema = z.object({
-    username: z.string().min(3).max(50),
-    email: z.string().email(),
-    firstName: z.string().min(1),
-    lastName: z.string().min(1),
-});
+function usePinnedMessages(receiverId: string) {
+  const { data, isLoading } = useQuery<IPinnedMessage[]>({
+    queryKey: [QUERY_KEY.PINNED, receiverId],
+    queryFn: async () => getPinnedMessages(receiverId),
+    enabled: !!receiverId,
+  });
 
-type UserBlogData = z.infer<typeof userSchema>;
-
-interface CreateUserBlogProps {
-    onSuccess?: () => void;
+  return { pinned: data || [], isLoadingPinned: isLoading };
 }
 
-export const CreateUserBlog: React.FC<CreateUserBlogProps> = ({ onSuccess }) => {
-    const queryClient = useQueryClient();
-    const { showSuccess, showError } = useMuiSnackbar();
-
-    const { register, handleSubmit, blogState: { errors }, reset } = useBlog<UserBlogData>({
-        resolver: zodResolver(userSchema),
-        defaultValues: {
-            username: '',
-            email: '',
-            firstName: '',
-            lastName: '',
-        },
-    });
-
-    const createMutation = useMutation({
-        mutationFn: (data: UserBlogData) => userApi.createUser(data),
-
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['users'] });
-            showSuccess('User created successfully');
-            reset();
-            onSuccess?.();
-        },
-
-        onError: () => {
-            showError('Failed to create user');
-        },
-    });
-
-    const onSubmit = (data: UserBlogData) => {
-        createMutation.mutate(data);
-    };
-
-    return (
-        <Paper sx={{ p: 3, maxWidth: 500 }}>
-            <blog onSubmit={handleSubmit(onSubmit)}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <TextField
-                        {...register('username')}
-                        label='Username'
-                        error={!!errors.username}
-                        helperText={errors.username?.message}
-                        fullWidth
-                    />
-
-                    <TextField
-                        {...register('email')}
-                        label='Email'
-                        type='email'
-                        error={!!errors.email}
-                        helperText={errors.email?.message}
-                        fullWidth
-                    />
-
-                    <TextField
-                        {...register('firstName')}
-                        label='First Name'
-                        error={!!errors.firstName}
-                        helperText={errors.firstName?.message}
-                        fullWidth
-                    />
-
-                    <TextField
-                        {...register('lastName')}
-                        label='Last Name'
-                        error={!!errors.lastName}
-                        helperText={errors.lastName?.message}
-                        fullWidth
-                    />
-
-                    <Button
-                        type='submit'
-                        variant='contained'
-                        disabled={createMutation.isPending}
-                    >
-                        {createMutation.isPending ? 'Creating...' : 'Create User'}
-                    </Button>
-                </Box>
-            </blog>
-        </Paper>
-    );
-};
-
-export default CreateUserBlog;
+export default usePinnedMessages;
 ```
 
----
-
-## Example 2: Parent Container with Lazy Loading
-
 ```typescript
-import React from 'react';
-import { Box } from '@mui/material';
-import { SuspenseLoader } from '~components/SuspenseLoader';
+import { QUERY_KEY } from "@/constants/query-key";
+import { pinMessage } from "@/services/messages";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { AxiosError } from "axios";
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 
-// Lazy load heavy components
-const UserList = React.lazy(() => import('./UserList'));
-const UserStats = React.lazy(() => import('./UserStats'));
-const ActivityFeed = React.lazy(() => import('./ActivityFeed'));
+function usePinMessage() {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
-export const UserDashboard: React.FC = () => {
-    return (
-        <Box sx={{ p: 2 }}>
-            <SuspenseLoader>
-                <UserStats />
-            </SuspenseLoader>
+  return useMutation({
+    mutationKey: ["pin-message"],
+    mutationFn: async (messageId: string) => pinMessage(messageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY.PINNED] });
+      toast.success(t("chat.pinned.success"));
+    },
+    onError: (error: AxiosError<{ code: string }>) => {
+      toast.error(t(`errors.${error.response?.data?.code}`));
+    },
+  });
+}
 
-            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                <Box sx={{ flex: 2 }}>
-                    <SuspenseLoader>
-                        <UserList />
-                    </SuspenseLoader>
-                </Box>
-
-                <Box sx={{ flex: 1 }}>
-                    <SuspenseLoader>
-                        <ActivityFeed />
-                    </SuspenseLoader>
-                </Box>
-            </Box>
-        </Box>
-    );
-};
-
-export default UserDashboard;
+export default usePinMessage;
 ```
 
-**Benefits:**
-- Each section loads independently
-- User sees partial content sooner
-- Better perceived perblogance
+## 5. Translations — `locales/en.json` and `locales/vi.json`
 
----
-
-## Example 3: Cache-First Strategy Implementation
-
-Complete example based on useSuspensePost.ts:
-
-```typescript
-import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query';
-import { postApi } from '@/services/posts';
-import type { Post } from '@/interfaces/post';
-
-/**
- * Smart post hook with cache-first strategy
- * Reuses data from grid cache when available
- */
-export function useSuspensePost(blogId: number, postId: number) {
-    const queryClient = useQueryClient();
-
-    return useSuspenseQuery<Post, Error>({
-        queryKey: ['post', blogId, postId],
-        queryFn: async () => {
-            // Strategy 1: Check grid cache first (avoids API call)
-            const gridCache = queryClient.getQueryData<{ rows: Post[] }>([
-                'posts-v2',
-                blogId,
-                'summary'
-            ]) || queryClient.getQueryData<{ rows: Post[] }>([
-                'posts-v2',
-                blogId,
-                'flat'
-            ]);
-
-            if (gridCache?.rows) {
-                const cached = gridCache.rows.find(
-                    (row) => row.S_ID === postId
-                );
-
-                if (cached) {
-                    return cached;  // Return from cache - no API call!
-                }
-            }
-
-            // Strategy 2: Not in cache, fetch from API
-            return postApi.getPost(blogId, postId);
-        },
-        staleTime: 5 * 60 * 1000,       // Fresh for 5 minutes
-        gcTime: 10 * 60 * 1000,          // Cache for 10 minutes
-        refetchOnWindowFocus: false,     // Don't refetch on focus
-    });
+```json
+"chat": {
+  "pinned": {
+    "title": "Pinned messages",
+    "empty": "No pinned messages yet",
+    "pin": "Pin",
+    "success": "Message pinned"
+  }
 }
 ```
 
-**Why this pattern:**
-- Checks grid cache before API
-- Instant data if user came from grid
-- Falls back to API if not cached
-- Configurable cache times
+```json
+"chat": {
+  "pinned": {
+    "title": "Tin nhắn đã ghim",
+    "empty": "Chưa có tin nhắn nào được ghim",
+    "pin": "Ghim",
+    "success": "Đã ghim tin nhắn"
+  }
+}
+```
 
----
+## 6. Component — `components/Message/MessagePinned.tsx`
 
-## Example 4: Complete Route File
+```tsx
+import { Pin } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { IPinnedMessage } from "@/interfaces/message";
 
-```typescript
-/**
- * Project catalog route
- * Path: /project-catalog
- */
-
-import { createFileRoute } from '@tanstack/react-router';
-import { lazy } from 'react';
-
-// Lazy load the PostTable component
-const PostTable = lazy(() =>
-    import('@/components/Posts/PostTable').then(
-        (module) => ({ default: module.PostTable })
-    )
-);
-
-// Route constants
-const PROJECT_CATALOG_FORM_ID = 744;
-const PROJECT_CATALOG_PROJECT_ID = 225;
-
-export const Route = createFileRoute('/project-catalog/')({
-    component: ProjectCatalogPage,
-    loader: () => ({
-        crumb: 'Projects',  // Breadcrumb title
-    }),
-});
-
-function ProjectCatalogPage() {
-    return (
-        <PostTable
-            blogId={PROJECT_CATALOG_FORM_ID}
-            projectId={PROJECT_CATALOG_PROJECT_ID}
-            tableType='active_projects'
-            title='Blog Dashboard'
-        />
-    );
+interface Props {
+  pinned: IPinnedMessage[];
+  isLoading: boolean;
+  className?: string;
 }
 
-export default ProjectCatalogPage;
-```
+function MessagePinned({ pinned, isLoading, className }: Props) {
+  const { t } = useTranslation();
 
----
+  return (
+    <div className={cn("border-b border-border px-5 py-3", className)}>
+      <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+        <Pin className="size-4" />
+        {t("chat.pinned.title")}
+      </div>
 
-## Example 5: Dialog with Blog
-
-```typescript
-import React from 'react';
-import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
-    TextField,
-    Box,
-    IconButton,
-} from '@mui/material';
-import { Close, PersonAdd } from '@mui/icons-material';
-import { useBlog } from 'react-hook-blog';
-import { zodResolver } from '@hookblog/resolvers/zod';
-import { z } from 'zod';
-
-const blogSchema = z.object({
-    name: z.string().min(1),
-    email: z.string().email(),
-});
-
-type BlogData = z.infer<typeof blogSchema>;
-
-interface AddUserDialogProps {
-    open: boolean;
-    onClose: () => void;
-    onSubmit: (data: BlogData) => Promise<void>;
+      {isLoading ? (
+        <Skeleton className="mt-2 h-8 rounded-xl" />
+      ) : pinned.length === 0 ? (
+        <p className="mt-2 text-sm text-muted-foreground">{t("chat.pinned.empty")}</p>
+      ) : (
+        <ul className="mt-2 flex flex-col gap-1">
+          {pinned.map((item) => (
+            <li key={item._id} className="truncate rounded-xl bg-secondary px-3 py-1.5 text-sm">
+              {item.messageId}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
-export const AddUserDialog: React.FC<AddUserDialogProps> = ({
-    open,
-    onClose,
-    onSubmit,
-}) => {
-    const { register, handleSubmit, blogState: { errors }, reset } = useBlog<BlogData>({
-        resolver: zodResolver(blogSchema),
-    });
+export default MessagePinned;
+```
 
-    const handleClose = () => {
-        reset();
-        onClose();
-    };
+## 7. Wire into the area — `components/Message/index.tsx`
 
-    const handleBlogSubmit = async (data: BlogData) => {
-        await onSubmit(data);
-        handleClose();
-    };
+```tsx
+import MessagePinned from "./MessagePinned";
+import usePinnedMessages from "@/hooks/usePinnedMessages";
 
-    return (
-        <Dialog open={open} onClose={handleClose} maxWidth='sm' fullWidth>
-            <DialogTitle>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <PersonAdd color='primary' />
-                        Add User
-                    </Box>
-                    <IconButton onClick={handleClose} size='small'>
-                        <Close />
-                    </IconButton>
-                </Box>
-            </DialogTitle>
+const { pinned, isLoadingPinned } = usePinnedMessages(activeId || "");
 
-            <blog onSubmit={handleSubmit(handleBlogSubmit)}>
-                <DialogContent>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <TextField
-                            {...register('name')}
-                            label='Name'
-                            error={!!errors.name}
-                            helperText={errors.name?.message}
-                            fullWidth
-                            autoFocus
-                        />
+<MessageHeader ... />
+<MessagePinned pinned={pinned} isLoading={isLoadingPinned} />
+<MessageThread ... />
+```
 
-                        <TextField
-                            {...register('email')}
-                            label='Email'
-                            type='email'
-                            error={!!errors.email}
-                            helperText={errors.email?.message}
-                            fullWidth
-                        />
-                    </Box>
-                </DialogContent>
+And the action in a leaf (`MessageBubble.tsx`):
 
-                <DialogActions>
-                    <Button onClick={handleClose}>Cancel</Button>
-                    <Button type='submit' variant='contained'>
-                        Add User
-                    </Button>
-                </DialogActions>
-            </blog>
-        </Dialog>
-    );
-};
+```tsx
+const { mutate: pin, isPending } = usePinMessage();
+
+<Button variant="ghost" size="icon" disabled={isPending} onClick={() => pin(message._id)}>
+  <Pin />
+  <span className="sr-only">{t("chat.pinned.pin")}</span>
+</Button>
 ```
 
 ---
 
-## Example 6: Parallel Data Fetching
+## Example: New Page + Route
 
-```typescript
-import React from 'react';
-import { Box, Grid, Paper } from '@mui/material';
-import { useSuspenseQueries } from '@tanstack/react-query';
-import { userApi } from '@/services/users';
-import { statsApi } from '@/services/stats';
-import { activityApi } from '@/services/activity';
+```tsx
+// pages/Settings.tsx
+import SettingsPanel from "@/components/SettingsPanel";
 
-export const Dashboard: React.FC = () => {
-    // Fetch all data in parallel with Suspense
-    const [statsQuery, usersQuery, activityQuery] = useSuspenseQueries({
-        queries: [
-            {
-                queryKey: ['stats'],
-                queryFn: () => statsApi.getStats(),
-            },
-            {
-                queryKey: ['users', 'active'],
-                queryFn: () => userApi.getActiveUsers(),
-            },
-            {
-                queryKey: ['activity', 'recent'],
-                queryFn: () => activityApi.getRecent(),
-            },
-        ],
-    });
+function Settings() {
+  return <SettingsPanel />;
+}
 
-    return (
-        <Box sx={{ p: 2 }}>
-            <Grid container spacing={2}>
-                <Grid size={{ xs: 12, md: 4 }}>
-                    <Paper sx={{ p: 2 }}>
-                        <h3>Stats</h3>
-                        <p>Total: {statsQuery.data.total}</p>
-                    </Paper>
-                </Grid>
-
-                <Grid size={{ xs: 12, md: 4 }}>
-                    <Paper sx={{ p: 2 }}>
-                        <h3>Active Users</h3>
-                        <p>Count: {usersQuery.data.length}</p>
-                    </Paper>
-                </Grid>
-
-                <Grid size={{ xs: 12, md: 4 }}>
-                    <Paper sx={{ p: 2 }}>
-                        <h3>Recent Activity</h3>
-                        <p>Events: {activityQuery.data.length}</p>
-                    </Paper>
-                </Grid>
-            </Grid>
-        </Box>
-    );
-};
-
-// Usage with Suspense
-<SuspenseLoader>
-    <Dashboard />
-</SuspenseLoader>
+export default Settings;
 ```
 
----
-
-## Example 7: Optimistic Update
-
-```typescript
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { User } from '@/interfaces/user';
-
-export const useToggleUserStatus = () => {
-    const queryClient = useQueryClient();
-
-    return useMutation({
-        mutationFn: (userId: string) => userApi.toggleStatus(userId),
-
-        // Optimistic update
-        onMutate: async (userId) => {
-            // Cancel outgoing refetches
-            await queryClient.cancelQueries({ queryKey: ['users'] });
-
-            // Snapshot previous value
-            const previousUsers = queryClient.getQueryData<User[]>(['users']);
-
-            // Optimistically update UI
-            queryClient.setQueryData<User[]>(['users'], (old) => {
-                return old?.map(user =>
-                    user.id === userId
-                        ? { ...user, active: !user.active }
-                        : user
-                ) || [];
-            });
-
-            return { previousUsers };
-        },
-
-        // Rollback on error
-        onError: (err, userId, context) => {
-            queryClient.setQueryData(['users'], context?.previousUsers);
-        },
-
-        // Refetch after mutation
-        onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: ['users'] });
-        },
-    });
-};
+```tsx
+// routes/routes.tsx
+{
+  href: "/settings",
+  id: "settings",
+  name: "Settings",
+  element: (
+    <AuthGuard>
+      <ChatLayout>
+        <Settings />
+      </ChatLayout>
+    </AuthGuard>
+  ),
+},
 ```
 
----
-
-## Summary
-
-**Key Takeaways:**
-
-1. **Component Pattern**: React.FC + lazy + Suspense + useSuspenseQuery
-2. **File Structure**: services/, components/, hooks/, interfaces/
-3. **Routing**: Folder-based with lazy loading
-4. **Data Fetching**: useSuspenseQuery with cache-first strategy
-5. **Blogs**: React Hook Blog + Zod validation
-6. **Error Handling**: useMuiSnackbar + onError callbacks
-7. **Perblogance**: useMemo, useCallback, React.memo, debouncing
-8. **Styling**: Inline <100 lines, sx prop, MUI v7 syntax
-
-**See other resources for detailed explanations of each pattern.**
+Files touched for a typical feature: `interfaces/` → `constants/query-key.ts` → `services/` → `hooks/` → `locales/en.json` + `vi.json` → `components/<Area>/` → (`pages/` + `routes/routes.tsx` if new screen).

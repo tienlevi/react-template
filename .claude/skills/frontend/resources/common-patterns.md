@@ -1,331 +1,136 @@
 # Common Patterns
 
-Frequently used patterns for forms, authentication, DataGrid, dialogs, and other common UI elements.
+Forms, i18n, auth/tokens, theme, contexts.
 
 ---
 
-## Authentication with useAuth
+## Forms: react-hook-form + zod + i18n
 
-### Getting Current User
+### 1. Schema in `utils/validations.ts`
+
+Schemas are **factories** so messages are re-translated when the language changes:
 
 ```typescript
-import { useAuth } from '@/hooks/useAuth';
+import i18n from "@/utils/i18n";
+import { z } from "zod";
 
-export const MyComponent: React.FC = () => {
-    const { user } = useAuth();
+export const loginSchema = () =>
+  z.object({
+    email: z
+      .email(i18n.t("auth.validation.emailInvalid"))
+      .min(1, i18n.t("auth.validation.emailRequired")),
+    password: z.string().min(6, i18n.t("auth.validation.passwordMin")),
+  });
 
-    // Available properties:
-    // - user.id: string
-    // - user.email: string
-    // - user.username: string
-    // - user.roles: string[]
-
-    return (
-        <div>
-            <p>Logged in as: {user.email}</p>
-            <p>Username: {user.username}</p>
-            <p>Roles: {user.roles.join(', ')}</p>
-        </div>
-    );
-};
+export type LoginFormValues = z.infer<ReturnType<typeof loginSchema>>;
 ```
 
-**NEVER make direct API calls for auth** - always use `useAuth` hook.
+Cross-field rules use `.refine(..., { message, path: ["confirmPassword"] })` (see `registerSchema`).
 
----
+### 2. Form component (`components/LoginForm/index.tsx`)
 
-## Forms with React Hook Form
-
-### Basic Form
-
-```typescript
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { TextField, Button } from '@mui/material';
-import { useMuiSnackbar } from '@/hooks/useMuiSnackbar';
-
-// Zod schema for validation
-const formSchema = z.object({
-    username: z.string().min(3, 'Username must be at least 3 characters'),
-    email: z.string().email('Invalid email address'),
-    age: z.number().min(18, 'Must be 18 or older'),
+```tsx
+const { t, i18n } = useTranslation();
+const schema = useMemo(() => loginSchema(), [i18n.language]);
+const { control, handleSubmit } = useForm<LoginFormValues>({
+  resolver: zodResolver(schema),
+  defaultValues: { email: "", password: "" },
 });
+const { mutate: handleLogin, isPending } = useLogin();
 
-type FormData = z.infer<typeof formSchema>;
-
-export const MyForm: React.FC = () => {
-    const { showSuccess, showError } = useMuiSnackbar();
-
-    const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
-        resolver: zodResolver(formSchema),
-        defaultValues: {
-            username: '',
-            email: '',
-            age: 18,
-        },
-    });
-
-    const onSubmit = async (data: FormData) => {
-        try {
-            await api.submitForm(data);
-            showSuccess('Form submitted successfully');
-        } catch (error) {
-            showError('Failed to submit form');
-        }
-    };
-
-    return (
-        <form onSubmit={handleSubmit(onSubmit)}>
-            <TextField
-                {...register('username')}
-                label='Username'
-                error={!!errors.username}
-                helperText={errors.username?.message}
-            />
-
-            <TextField
-                {...register('email')}
-                label='Email'
-                error={!!errors.email}
-                helperText={errors.email?.message}
-                type='email'
-            />
-
-            <TextField
-                {...register('age', { valueAsNumber: true })}
-                label='Age'
-                error={!!errors.age}
-                helperText={errors.age?.message}
-                type='number'
-            />
-
-            <Button type='submit' variant='contained'>
-                Submit
-            </Button>
-        </form>
-    );
-};
-```
-
----
-
-## Dialog Component Pattern
-
-### Standard Dialog Structure
-
-From BEST_PRACTICES.md - All dialogs should have:
-- Icon in title
-- Close button (X)
-- Action buttons at bottom
-
-```typescript
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton } from '@mui/material';
-import { Close, Info } from '@mui/icons-material';
-
-interface MyDialogProps {
-    open: boolean;
-    onClose: () => void;
-    onConfirm: () => void;
+function onSubmit(values: LoginFormValues) {
+  handleLogin(values);
 }
 
-export const MyDialog: React.FC<MyDialogProps> = ({ open, onClose, onConfirm }) => {
-    return (
-        <Dialog open={open} onClose={onClose} maxWidth='sm' fullWidth>
-            <DialogTitle>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Info color='primary' />
-                        Dialog Title
-                    </Box>
-                    <IconButton onClick={onClose} size='small'>
-                        <Close />
-                    </IconButton>
-                </Box>
-            </DialogTitle>
-
-            <DialogContent>
-                {/* Content here */}
-            </DialogContent>
-
-            <DialogActions>
-                <Button onClick={onClose}>Cancel</Button>
-                <Button onClick={onConfirm} variant='contained'>
-                    Confirm
-                </Button>
-            </DialogActions>
-        </Dialog>
-    );
-};
+<form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
+  <Controller
+    control={control}
+    name="email"
+    render={({ field, fieldState }) => (
+      <div className="grid gap-2">
+        <Label htmlFor="email" className={cn(fieldState.error && "text-destructive")}>
+          {t("auth.login.emailLabel")}
+        </Label>
+        <Input id="email" type="email" className="h-12 rounded-xl" {...field} />
+        {fieldState.error && (
+          <p className="text-sm text-destructive">{fieldState.error.message}</p>
+        )}
+      </div>
+    )}
+  />
+  <Button disabled={isPending} type="submit">{t("auth.login.submit")}</Button>
+</form>
 ```
+
+Use `Controller` + shadcn `Label`/`Input` (the pattern in Login/Register forms).
 
 ---
 
-## DataGrid Wrapper Pattern
+## i18n
 
-### Wrapper Component Contract
+- Setup: `utils/i18n.ts` (imported once in `App.tsx`). Languages: `en`, `vi`; detection from `localStorage["language"]` then navigator.
+- Resources: `locales/en.json`, `locales/vi.json`, nested by area: `common.*`, `auth.login.*`, `auth.register.*`, `auth.validation.*`, `friends.*`, `chat.*`, `errors.*`.
+- In components: `const { t } = useTranslation(); t("friends.title")`; dynamic keys: `t(\`friends.tabs.${option}\`)`.
+- Outside React (schemas, utils): `import i18n from "@/utils/i18n"; i18n.t("...")`.
+- **Always add the key to both JSON files** with the same structure.
+- Language switching UI: `components/LanguageSwitcher`.
 
-From BEST_PRACTICES.md - DataGrid wrappers should accept:
+---
 
-**Required Props:**
-- `rows`: Data array
-- `columns`: Column definitions
-- Loading/error states
+## Auth & Tokens
 
-**Optional Props:**
-- Toolbar components
-- Custom actions
-- Initial state
+- Login (`hooks/useLogin.ts`): stores `accessToken` in `localStorage[ACCESS_TOKEN_KEY]`, `refreshToken` in a cookie via `js-cookie`, invalidates `QUERY_KEY.USER`, toasts, navigates `/chat`.
+- Current user: `const { data: user, isLoading } = useAuth();` (query key `[QUERY_KEY.USER, accessToken]`, disabled without token).
+- Logout: `hooks/useLogout.ts`.
+- Refresh on 401 is automatic in `utils/axios.ts`.
+- Route protection: `routes/AuthGuard.tsx`.
 
-```typescript
-import { DataGridPro } from '@mui/x-data-grid-pro';
-import type { GridColDef } from '@mui/x-data-grid-pro';
+---
 
-interface DataGridWrapperProps {
-    rows: any[];
-    columns: GridColDef[];
-    loading?: boolean;
-    toolbar?: React.ReactNode;
-    onRowClick?: (row: any) => void;
+## Theme
+
+`contexts/ThemeContext.tsx` toggles the `dark` class on `<html>` and persists to `localStorage["theme"]`.
+
+```tsx
+import { useTheme } from "@/contexts/ThemeContext";
+const { theme, setTheme } = useTheme();
+setTheme(theme === "dark" ? "light" : "dark");
+```
+
+UI: `components/ThemeToggle`.
+
+---
+
+## Contexts
+
+Providers live in `contexts/`, default-export the provider, named-export the consumer hook that throws outside the provider:
+
+```tsx
+const Ctx = createContext<Value | undefined>(undefined);
+
+function SomeContext({ children }: { children: React.ReactNode }) {
+  return <Ctx.Provider value={...}>{children}</Ctx.Provider>;
 }
 
-export const DataGridWrapper: React.FC<DataGridWrapperProps> = ({
-    rows,
-    columns,
-    loading = false,
-    toolbar,
-    onRowClick,
-}) => {
-    return (
-        <DataGridPro
-            rows={rows}
-            columns={columns}
-            loading={loading}
-            slots={{ toolbar: toolbar ? () => toolbar : undefined }}
-            onRowClick={(params) => onRowClick?.(params.row)}
-            // Standard configuration
-            pagination
-            pageSizeOptions={[25, 50, 100]}
-            initialState={{
-                pagination: { paginationModel: { pageSize: 25 } },
-            }}
-        />
-    );
-};
-```
-
----
-
-## Mutation Patterns
-
-### Update with Cache Invalidation
-
-```typescript
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useMuiSnackbar } from '@/hooks/useMuiSnackbar';
-
-export const useUpdateEntity = () => {
-    const queryClient = useQueryClient();
-    const { showSuccess, showError } = useMuiSnackbar();
-
-    return useMutation({
-        mutationFn: ({ id, data }: { id: number; data: any }) =>
-            api.updateEntity(id, data),
-
-        onSuccess: (result, variables) => {
-            // Invalidate affected queries
-            queryClient.invalidateQueries({ queryKey: ['entity', variables.id] });
-            queryClient.invalidateQueries({ queryKey: ['entities'] });
-
-            showSuccess('Entity updated');
-        },
-
-        onError: () => {
-            showError('Failed to update entity');
-        },
-    });
-};
-
-// Usage
-const updateEntity = useUpdateEntity();
-
-const handleSave = () => {
-    updateEntity.mutate({ id: 123, data: { name: 'New Name' } });
-};
-```
-
----
-
-## State Management Patterns
-
-### TanStack Query for Server State (PRIMARY)
-
-Use TanStack Query for **all server data**:
-- Fetching: useSuspenseQuery
-- Mutations: useMutation
-- Caching: Automatic
-- Synchronization: Built-in
-
-```typescript
-// ✅ CORRECT - TanStack Query for server data
-const { data: users } = useSuspenseQuery({
-    queryKey: ['users'],
-    queryFn: () => userApi.getUsers(),
-});
-```
-
-### useState for UI State
-
-Use `useState` for **local UI state only**:
-- Form inputs (uncontrolled)
-- Modal open/closed
-- Selected tab
-- Temporary UI flags
-
-```typescript
-// ✅ CORRECT - useState for UI state
-const [modalOpen, setModalOpen] = useState(false);
-const [selectedTab, setSelectedTab] = useState(0);
-```
-
-### Zustand for Global Client State (Minimal)
-
-Use Zustand only for **global client state**:
-- Theme preference
-- Sidebar collapsed state
-- User preferences (not from server)
-
-```typescript
-import { create } from 'zustand';
-
-interface AppState {
-    sidebarOpen: boolean;
-    toggleSidebar: () => void;
+export function useSome() {
+  const context = useContext(Ctx);
+  if (!context) throw new Error("useSome must be used within SomeContext");
+  return context;
 }
 
-export const useAppState = create<AppState>((set) => ({
-    sidebarOpen: true,
-    toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-}));
+export default SomeContext;
 ```
 
-**Avoid prop drilling** - use context or Zustand instead.
+Mount new providers in `App.tsx` around `BrowserRouter`.
 
 ---
 
-## Summary
+## Client State (Zustand)
 
-**Common Patterns:**
-- ✅ useAuth hook for current user (id, email, roles, username)
-- ✅ React Hook Form + Zod for forms
-- ✅ Dialog with icon + close button
-- ✅ DataGrid wrapper contracts
-- ✅ Mutations with cache invalidation
-- ✅ TanStack Query for server state
-- ✅ useState for UI state
-- ✅ Zustand for global client state (minimal)
+`zustand` + `immer` are installed. For cross-component client state that isn't server data (e.g. UI preferences, socket status), create a store — keep server data in TanStack Query, not Zustand.
 
-**See Also:**
-- [data-fetching.md](data-fetching.md) - TanStack Query patterns
-- [component-patterns.md](component-patterns.md) - Component structure
-- [loading-and-error-states.md](loading-and-error-states.md) - Error handling
+---
+
+## Dialogs
+
+Use shadcn `Dialog` from `@/components/ui/dialog` (`Dialog`, `DialogTrigger`, `DialogContent`, `DialogHeader`, `DialogTitle`, `DialogFooter`). Translate title and buttons; use `common.cancel` / `common.save`.

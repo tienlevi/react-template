@@ -1,364 +1,108 @@
 # Routing Guide
 
-TanStack Router implementation with folder-based routing and lazy loading patterns.
+`react-router-dom` v7 in declarative mode: `BrowserRouter` + `<Routes>` generated from a config array. No file-based routing, no TanStack Router.
 
 ---
 
-## TanStack Router Overview
+## Setup (`App.tsx`)
 
-**TanStack Router** with file-based routing:
-- Folder structure defines routes
-- Lazy loading for code splitting
-- Type-safe routing
-- Breadcrumb loaders
+```tsx
+<ThemeContext>
+  <QueryContext>
+    <BrowserRouter>
+      <Routes>
+        <Route>
+          {routers.map((route) => (
+            <Route key={route.id} path={route.href} element={route.element} />
+          ))}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+    <Toaster position="top-right" />
+  </QueryContext>
+</ThemeContext>
+```
+
+Unknown paths redirect to `/`.
 
 ---
 
-## Folder-Based Routing
-
-### Directory Structure
-
-```
-routes/
-  __root.tsx                    # Root layout
-  index.tsx                     # Home route (/)
-  posts/
-    index.tsx                   # /posts
-    create/
-      index.tsx                 # /posts/create
-    $postId.tsx                 # /posts/:postId (dynamic)
-  comments/
-    index.tsx                   # /comments
-```
-
-**Pattern**:
-- `index.tsx` = Route at that path
-- `$param.tsx` = Dynamic parameter
-- Nested folders = Nested routes
-
----
-
-## Basic Route Pattern
-
-### Example from posts/index.tsx
+## Route Config (`routes/routes.tsx`)
 
 ```typescript
-/**
- * Posts route component
- * Displays the main blog posts list
- */
-
-import { createFileRoute } from '@tanstack/react-router';
-import { lazy } from 'react';
-
-// Lazy load the page component
-const PostsList = lazy(() =>
-    import('@/components/Posts/PostsList').then(
-        (module) => ({ default: module.PostsList }),
-    ),
-);
-
-export const Route = createFileRoute('/posts/')({
-    component: PostsPage,
-    // Define breadcrumb data
-    loader: () => ({
-        crumb: 'Posts',
-    }),
-});
-
-function PostsPage() {
-    return (
-        <PostsList
-            title='All Posts'
-            showFilters={true}
-        />
-    );
-}
-
-export default PostsPage;
-```
-
-**Key Points:**
-- Lazy load heavy components
-- `createFileRoute` with route path
-- `loader` for breadcrumb data
-- Page component renders content
-- Export both Route and component
-
----
-
-## Lazy Loading Routes
-
-### Named Export Pattern
-
-```typescript
-import { lazy } from 'react';
-
-// For named exports, use .then() to map to default
-const MyPage = lazy(() =>
-    import('@/pages/MyPage').then(
-        (module) => ({ default: module.MyPage })
-    )
-);
-```
-
-### Default Export Pattern
-
-```typescript
-import { lazy } from 'react';
-
-// For default exports, simpler syntax
-const MyPage = lazy(() => import('@/pages/MyPage'));
-```
-
-### Why Lazy Load Routes?
-
-- Code splitting - smaller initial bundle
-- Faster initial page load
-- Load route code only when navigated to
-- Better performance
-
----
-
-## createFileRoute
-
-### Basic Configuration
-
-```typescript
-export const Route = createFileRoute('/my-route/')({
-    component: MyRoutePage,
-});
-
-function MyRoutePage() {
-    return <div>My Route Content</div>;
-}
-```
-
-### With Breadcrumb Loader
-
-```typescript
-export const Route = createFileRoute('/my-route/')({
-    component: MyRoutePage,
-    loader: () => ({
-        crumb: 'My Route Title',
-    }),
-});
-```
-
-Breadcrumb appears in navigation/app bar automatically.
-
-### With Data Loader
-
-```typescript
-export const Route = createFileRoute('/my-route/')({
-    component: MyRoutePage,
-    loader: async () => {
-        // Can prefetch data here
-        const data = await api.getData();
-        return { crumb: 'My Route', data };
-    },
-});
-```
-
-### With Search Params
-
-```typescript
-export const Route = createFileRoute('/search/')({
-    component: SearchPage,
-    validateSearch: (search: Record<string, unknown>) => {
-        return {
-            query: (search.query as string) || '',
-            page: Number(search.page) || 1,
-        };
-    },
-});
-
-function SearchPage() {
-    const { query, page } = Route.useSearch();
-    // Use query and page
-}
-```
-
----
-
-## Dynamic Routes
-
-### Parameter Routes
-
-```typescript
-// routes/users/$userId.tsx
-
-export const Route = createFileRoute('/users/$userId')({
-    component: UserPage,
-});
-
-function UserPage() {
-    const { userId } = Route.useParams();
-
-    return <UserProfile userId={userId} />;
-}
-```
-
-### Multiple Parameters
-
-```typescript
-// routes/posts/$postId/comments/$commentId.tsx
-
-export const Route = createFileRoute('/posts/$postId/comments/$commentId')({
-    component: CommentPage,
-});
-
-function CommentPage() {
-    const { postId, commentId } = Route.useParams();
-
-    return <CommentEditor postId={postId} commentId={commentId} />;
-}
-```
-
----
-
-## Navigation
-
-### Programmatic Navigation
-
-```typescript
-import { useNavigate } from '@tanstack/react-router';
-
-export const MyComponent: React.FC = () => {
-    const navigate = useNavigate();
-
-    const handleClick = () => {
-        navigate({ to: '/posts' });
-    };
-
-    return <Button onClick={handleClick}>View Posts</Button>;
+// interfaces/routes.ts
+export type Routes = {
+  href: string;
+  id: string;
+  name: string;
+  element: React.ReactNode;
 };
 ```
 
-### With Parameters
+Add a route by appending an entry. Wrap in `AuthGuard`, and in `ChatLayout` for app screens:
 
-```typescript
-const handleNavigate = () => {
-    navigate({
-        to: '/users/$userId',
-        params: { userId: '123' },
-    });
-};
+```tsx
+import Settings from "@/pages/Settings";
+
+{
+  href: "/settings",
+  id: "settings",
+  name: "Settings",
+  element: (
+    <AuthGuard>
+      <ChatLayout>
+        <Settings />
+      </ChatLayout>
+    </AuthGuard>
+  ),
+},
 ```
 
-### With Search Params
-
-```typescript
-const handleSearch = () => {
-    navigate({
-        to: '/search',
-        search: { query: 'test', page: 1 },
-    });
-};
-```
+Then add the nav entry in `components/NavRail` if it should appear in the sidebar.
 
 ---
 
-## Route Layout Pattern
+## AuthGuard (`routes/AuthGuard.tsx`)
 
-### Root Layout (__root.tsx)
+- Uses `useAuth()`; shows a centered `Loader2` spinner while loading.
+- Logged in + on `/` or `/register` → redirect `/chat`.
+- Not logged in + any other page → redirect `/`.
 
-```typescript
-import { createRootRoute, Outlet } from '@tanstack/react-router';
-import { Box } from '@mui/material';
-import { CustomAppBar } from '~components/CustomAppBar';
-
-export const Route = createRootRoute({
-    component: RootLayout,
-});
-
-function RootLayout() {
-    return (
-        <Box>
-            <CustomAppBar />
-            <Box sx={{ p: 2 }}>
-                <Outlet />  {/* Child routes render here */}
-            </Box>
-        </Box>
-    );
-}
-```
-
-### Nested Layouts
-
-```typescript
-// routes/dashboard/index.tsx
-export const Route = createFileRoute('/dashboard/')({
-    component: DashboardLayout,
-});
-
-function DashboardLayout() {
-    return (
-        <Box>
-            <DashboardSidebar />
-            <Box sx={{ flex: 1 }}>
-                <Outlet />  {/* Nested routes */}
-            </Box>
-        </Box>
-    );
-}
-```
+If you add another public page (e.g. `/forgot-password`), add it to the `isAuthPage` check.
 
 ---
 
-## Complete Route Example
+## Navigation & URL State
 
-```typescript
-/**
- * User profile route
- * Path: /users/:userId
- */
+```tsx
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { createFileRoute } from '@tanstack/react-router';
-import { lazy } from 'react';
-import { SuspenseLoader } from '~components/SuspenseLoader';
+<Link to="/register">...</Link>
 
-// Lazy load heavy component
-const UserProfile = lazy(() =>
-    import('@/components/User/UserProfile').then(
-        (module) => ({ default: module.UserProfile })
-    )
-);
+const navigate = useNavigate();
+navigate("/chat", { replace: true });
+navigate(`/chat?receiverId=${user._id}`);
 
-export const Route = createFileRoute('/users/$userId')({
-    component: UserPage,
-    loader: () => ({
-        crumb: 'User Profile',
-    }),
-});
-
-function UserPage() {
-    const { userId } = Route.useParams();
-
-    return (
-        <SuspenseLoader>
-            <UserProfile userId={userId} />
-        </SuspenseLoader>
-    );
-}
-
-export default UserPage;
+const [searchParams] = useSearchParams();
+const receiverId = searchParams.get("receiverId") || "";
 ```
+
+The selected conversation is stored in the `receiverId` search param — keep URL as the source of truth for shareable selection state.
 
 ---
 
-## Summary
+## Lazy Loading (optional)
 
-**Routing Checklist:**
-- ✅ Folder-based: `routes/my-route/index.tsx`
-- ✅ Lazy load components: `React.lazy(() => import())`
-- ✅ Use `createFileRoute` with route path
-- ✅ Add breadcrumb in `loader` function
-- ✅ Wrap in `SuspenseLoader` for loading states
-- ✅ Use `Route.useParams()` for dynamic params
-- ✅ Use `useNavigate()` for programmatic navigation
+Routes are currently imported eagerly. If a page becomes heavy:
 
-**See Also:**
-- [component-patterns.md](component-patterns.md) - Lazy loading patterns
-- [loading-and-error-states.md](loading-and-error-states.md) - SuspenseLoader usage
-- [complete-examples.md](complete-examples.md) - Full route examples
+```tsx
+const Settings = lazy(() => import("@/pages/Settings"));
+element: (
+  <AuthGuard>
+    <Suspense fallback={<PageLoader />}>
+      <Settings />
+    </Suspense>
+  </AuthGuard>
+),
+```
